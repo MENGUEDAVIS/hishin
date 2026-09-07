@@ -90,11 +90,11 @@ export async function readLibrary(allowedProjects?: Set<string>): Promise<{ proj
           if (field === 'takes') summary.takeCount = manifest[field]!.length;
           else summary.photoCount = manifest[field]!.length;
         }
-      } catch { warnings.push(`Médias du projet ${projectId} : manifeste ${folder} illisible.`); }
+      } catch { warnings.push(`Project ${projectId} media: manifest ${folder} unreadable.`); }
     }
     const rendersRoot = join(base, 'renders');
     const entries = await readdir(rendersRoot, { withFileTypes: true }).catch((error: NodeJS.ErrnoException) => {
-      if (error.code !== 'ENOENT') warnings.push(`Rendus du projet ${projectId} inaccessibles.`);
+      if (error.code !== 'ENOENT') warnings.push(`Project ${projectId} renders unavailable.`);
       return [];
     });
     for (const entry of entries) {
@@ -114,10 +114,10 @@ export async function readLibrary(allowedProjects?: Set<string>): Promise<{ proj
             durationMs = parsed.durationMs;
             renderWarnings.push(...parsed.warnings);
           }
-        } catch { renderWarnings.push('Métadonnées du mixage illisibles ; la coupe assemblée reste disponible.'); }
+        } catch { renderWarnings.push('Mix metadata unreadable; the assembled cut is still available.'); }
         let review: z.infer<typeof reviewSchema> = {};
         try { review = reviewSchema.parse(await optionalJson(join(renderRoot, 'review.json')) ?? {}); }
-        catch { renderWarnings.push('Compte rendu des agents illisible.'); }
+        catch { renderWarnings.push('Agent review unreadable.'); }
         const segments: RenderSegment[] = manifest.editPlan.segments.map((segment, index) => {
           const timing = manifest.timeline[index];
           return {
@@ -142,7 +142,7 @@ export async function readLibrary(allowedProjects?: Set<string>): Promise<{ proj
         renders.push(render);
         summary.renderCount += 1;
         if (render.createdAt > summary.updatedAt) summary.updatedAt = render.createdAt;
-      } catch { warnings.push(`Rendu ${projectId}/${entry.name} : manifeste absent ou illisible.`); }
+      } catch { warnings.push(`Render ${projectId}/${entry.name}: manifest missing or unreadable.`); }
     }
     projects.push(summary);
   }

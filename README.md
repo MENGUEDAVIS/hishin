@@ -1,4 +1,4 @@
-# HI-SHIN — The Agentic Video Production Desk
+# HISHIN — The Agentic Video Production Desk
 
 Runs locally, no account or login required — clone it, follow
 [Installation](#installation) below, and it's ready. A separately hosted,
@@ -10,77 +10,79 @@ Architecture diagrams (system + the Director/Critic agent loop):
 
 « AI decides what to cut. Deterministic tools decide where to cut. »
 
-## État
+## Status
 
-Les 6 étapes du brief sont implémentées : pipeline média déterministe
-(`01-ingest` à `07-mix`), outils Strands, agents Director/Critic sur Amazon
-Bedrock, serveur Express + UI React, tests d'agents scriptés et scripts
-d'évaluation. Testé en conditions réelles à chaque étape (AWS Transcribe et
-Bedrock réels, vraies vidéos, vrai navigateur pour l'UI) — voir
-`docs/architecture.md` pour le détail de chaque validation.
+All 6 steps of the original brief are implemented: the deterministic media
+pipeline (`01-ingest` through `07-mix`), Strands tools, Director/Critic
+agents on Amazon Bedrock, an Express server + React UI, scripted agent
+tests, and evaluation scripts. Tested under real conditions at every step
+(real AWS Transcribe and Bedrock, real videos, a real browser for the UI)
+— see `docs/architecture.md` for the detail of every validation.
 
-Extension post-livraison : un champ **script** distinct du brief (le texte
-prévu pendant le tournage, comme référence pour l'agent), une **voix off
-générée** (Amazon Polly — `08-narrate.js`, timing mot-par-mot réel via
-speech marks) pour un CTA ou une transition absents des rushs, et des
-**photos uploadées** utilisables comme segments ou visuel derrière une
-narration (`01b-ingest-photos.js`, `09-photo-clip.js`, zoom Ken Burns,
-légende incrustée). Le plan éditorial mélange librement les 3 types de
-segment (`take` / `narration` / `photo`).
+Post-delivery extension: a **script** field distinct from the brief (the
+text the take was meant to say on camera, used as a reference by the
+agent), **generated voice-over narration** (Amazon Polly — `08-narrate.js`,
+real word-by-word timing via speech marks) for a CTA or transition missing
+from the raw footage, and **uploaded photos** usable as segments or as the
+visual behind a narration (`01b-ingest-photos.js`, `09-photo-clip.js`, a
+slow Ken Burns zoom, an optional burned-in caption). The editorial plan
+freely mixes all 3 segment types (`take` / `narration` / `photo`).
 
-Voir [l'architecture, les dépendances et les résultats des runs réels](docs/architecture.md)
-et [les contrats JSON de chaque module du pipeline](docs/tool-contracts.md).
+See [the architecture, dependencies, and real run results](docs/architecture.md)
+and [the JSON contracts of every pipeline module](docs/tool-contracts.md).
 
 ```sh
 npm run check:setup       # Node 24, FFmpeg/FFprobe, AWS CLI
-npm run typecheck         # tsc --noEmit sur tout le dépôt (JS inclus via JSDoc)
-npm test                  # unitaires + intégration (ffmpeg réel, ignoré si absent)
-npm run test:agents       # modèles scriptés ; le scénario de narration appelle Amazon Polly
-node scripts/pipeline.js <module> --file input.json   # exécuter un module isolément
+npm run typecheck         # tsc --noEmit across the repo (JS included via JSDoc)
+npm test                  # unit + integration (real ffmpeg, skipped if absent)
+npm run test:agents       # scripted models; the narration scenario calls Amazon Polly
+node scripts/pipeline.js <module> --file input.json   # run one module in isolation
 
-# Pipeline complet sur des rushs réels (ingest + AWS Transcribe + derush)
-node --env-file=.env scripts/run-project.js <projectId> <fichier1> <fichier2> ...
+# Full pipeline on real raw footage (ingest + real AWS Transcribe + derush)
+node --env-file=.env scripts/run-project.js <projectId> <file1> <file2> ...
 
-# Agents Director + Critic (Amazon Bedrock) en boucle jusqu'à PASS ou MAX_REVISION_ROUNDS
+# Director + Critic agents (Amazon Bedrock) looping until PASS or MAX_REVISION_ROUNDS
 node --env-file=.env --import tsx scripts/run-director.ts \
   <projectId> "<brief>" <targetDurationSeconds> <mp4|mov> <take_id> [take_id...]
 
-# Évaluation d'un rendu déjà produit
+# Evaluate an already-produced render
 node --import tsx eval/timing.ts <manifest.json>
 node --import tsx eval/production-metrics.ts <projectId> <manifest.json> [subtitles.srt]
 
-# Serveur + UI (deux processus séparés, l'UI proxy /api vers le serveur)
+# Server + UI (two separate processes; the UI proxies /api to the server)
 npm run server    # http://127.0.0.1:3001
 npm run ui:dev     # http://localhost:5173
 ```
 
-## Dashboard et historique des montages
+## Dashboard and edit history
 
-L'interface comprend un **Dashboard**, **Nouveau montage** et **Historique**.
-L'historique permet de rechercher les rendus, filtrer les verdicts et ouvrir chaque
-version pour lire la vidéo, consulter les segments retenus et les retours des agents.
-La coupe assemblée et le mixage sont consultables séparément lorsqu'ils existent.
-Le formulaire en cours est conservé quand on change d'onglet (pas après un rechargement).
+The UI has a **Dashboard**, **New edit**, and **History**. History lets you
+search past renders, filter by verdict, and open any version to watch the
+video, review the segments it kept, and read the agents' reasoning. The
+assembled cut and the final mix are viewable separately when both exist.
+The in-progress form is preserved when switching tabs (not across a page
+reload).
 
-`GET /api/library` découvre les projets et manifests de rendu déjà présents dans
-`DATA_DIR/projects`, y compris ceux produits auparavant par la CLI. Les anciennes
-vidéos restent visibles même sans compte rendu d'agent ; les informations absentes
-sont indiquées explicitement. Les fichiers vidéo supprimés sont signalés indisponibles.
+`GET /api/library` discovers projects and render manifests already present
+under `DATA_DIR/projects`, including ones produced earlier via the CLI.
+Older videos stay visible even without an agent review record; missing
+information is called out explicitly. Deleted video files are flagged as
+unavailable.
 
-Les nouvelles sessions du serveur sont sauvegardées atomiquement dans
-`projects/<id>/jobs/<jobId>.json`. Un redémarrage marque les sessions inachevées en
-erreur sans relancer automatiquement les agents. Un seul job par projet peut être
-actif dans le serveur. Chaque prochaine itération conserve les décisions du Director
-et l'évaluation du Critic dans le `review.json` du rendu ; les décisions déjà écrites
-restent accessibles si l'évaluation suivante échoue.
+New server sessions are saved atomically to `projects/<id>/jobs/<jobId>.json`.
+A restart marks any unfinished sessions as errored rather than silently
+resuming the agents. Only one job per project can be active on the server
+at a time. Each subsequent iteration keeps the Director's decisions and the
+Critic's evaluation in the render's `review.json`; previously written
+decisions stay accessible even if a later evaluation fails.
 
 ```sh
-npm run test:history  # anciennes versions, fichiers manquants, redémarrage ; sans AWS
-npm run ui:build      # compilation de l'interface
+npm run test:history  # older versions, missing files, restart behavior; no AWS needed
+npm run ui:build      # build the UI
 ```
 
-Après modification du backend, redémarrer `npm run server`. Pour un aperçu isolé
-sans interrompre un serveur existant :
+After changing the backend, restart `npm run server`. For an isolated
+preview without interrupting an existing server:
 
 ```sh
 PORT=3002 npm run server
@@ -89,8 +91,8 @@ API_PROXY_TARGET=http://127.0.0.1:3002 npm run ui:dev -- --host 127.0.0.1 --port
 
 ## Installation
 
-Prérequis : Node.js 24, npm, FFmpeg et FFprobe accessibles dans le PATH.
-Sur macOS avec Homebrew : `brew install ffmpeg`.
+Prerequisites: Node.js 24, npm, FFmpeg and FFprobe on the PATH. On macOS
+with Homebrew: `brew install ffmpeg`.
 
 ```sh
 npm ci
@@ -99,22 +101,25 @@ npm run check:setup
 npm run typecheck
 ```
 
-`check:setup` ne contacte pas AWS et retourne un code non nul si un prérequis média manque.
-`npm test` couvre le pipeline (unitaire + intégration ffmpeg réelle) ; `npm run test:agents`
-couvre les agents avec un modèle scripté ; son scénario de narration utilise Amazon Polly.
+`check:setup` doesn't contact AWS and exits non-zero if a required media
+tool is missing. `npm test` covers the pipeline (unit + real ffmpeg
+integration); `npm run test:agents` covers the agents with a scripted
+model — its narration scenario calls real Amazon Polly.
 
 ## AWS
 
-Le SDK utilise la chaîne standard d'identifiants AWS, y compris les profils de la CLI.
-Région : `us-east-1`. Depuis l'étape 4, `TRANSCRIBE_S3_BUCKET` pointe vers un bucket S3
-dédié (accès public bloqué, chiffrement AES256, expiration automatique à 7 jours sous le
-préfixe `hishin/`), et `BEDROCK_DIRECTOR_MODEL_ID`/`BEDROCK_CRITIC_MODEL_ID` référencent
-des profils d'inférence Bedrock vérifiés disponibles pour ce compte
-(`us.anthropic.claude-sonnet-4-6` et `us.anthropic.claude-haiku-4-5-20251001-v1:0` — Claude
-3.5 n'apparaissait pas dans le catalogue régional interrogé). Ces trois valeurs, l'appel
-`bedrock-runtime converse` et un run complet Director/Critic ont été testés avec de vrais
-appels AWS, pas seulement une lecture de catalogue.
+The SDK uses the standard AWS credential chain, including CLI profiles.
+Region: `us-east-1`. `TRANSCRIBE_S3_BUCKET` points to a dedicated S3
+bucket (public access blocked, AES256 encryption, automatic 7-day
+expiration under the `hishin/` prefix), and
+`BEDROCK_DIRECTOR_MODEL_ID`/`BEDROCK_CRITIC_MODEL_ID` reference Bedrock
+inference profiles verified available for this account
+(`us.anthropic.claude-sonnet-4-6` and
+`us.anthropic.claude-haiku-4-5-20251001-v1:0` — Claude 3.5 didn't appear
+in the queried regional catalog). These three values, the
+`bedrock-runtime converse` call, and a full Director/Critic run were all
+tested with real AWS calls, not just a catalog read.
 
-Le MVP prévu exécute les rendus localement et utilise Bedrock et AWS Transcribe à distance.
-Les permissions nécessaires seront limitées au modèle choisi, aux jobs Transcribe et au
-préfixe S3 du projet. Les identifiants AWS restent côté serveur.
+Renders run locally; Bedrock and AWS Transcribe are called remotely.
+Required permissions are limited to the chosen model, Transcribe jobs, and
+the project's S3 prefix. AWS credentials stay server-side.

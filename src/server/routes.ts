@@ -53,7 +53,7 @@ apiRouter.get('/library', async (_req, res) => {
     const library = await readLibrary();
     res.json({ ...library, jobs: listJobs() });
   } catch {
-    res.status(500).json({ error: 'Impossible de lire l’historique des montages.' });
+    res.status(500).json({ error: 'Unable to read the edit history.' });
   }
 });
 
@@ -74,7 +74,7 @@ const upload = multer({
   }),
   limits: { fileSize: Number(process.env.MAX_UPLOAD_MB || 500) * 1024 * 1024, files: 10, fields: 2 },
   fileFilter: (_req, file, callback) => {
-    if (!/\.(mov|mp4|m4v|avi|mkv|jpe?g|png|webp)$/i.test(file.originalname)) { callback(new Error('Format de fichier non autorisé.')); return; }
+    if (!/\.(mov|mp4|m4v|avi|mkv|jpe?g|png|webp)$/i.test(file.originalname)) { callback(new Error('File format not allowed.')); return; }
     callback(null, true);
   },
 });
@@ -254,7 +254,7 @@ apiRouter.get('/media', async (req, res) => {
   const parts = rel.split(/[\\/]/);
   const projectId = parts[0] === 'projects' ? parts[1] : undefined;
   if (!projectId || !/\.(mp4|mov|m4v|jpg|jpeg|png|webp|srt|vtt)$/i.test(resolved)) {
-    res.status(404).json({ error: 'Média introuvable.' }); return;
+    res.status(404).json({ error: 'Media not found.' }); return;
   }
   try {
     await withinDirectory(projectDir(projectId), resolved);

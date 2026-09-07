@@ -37,10 +37,10 @@ export function listJobs(): Job[] {
 export function startJob(input: OrchestrateInput): Job {
   loadJobs();
   if ([...jobs.values()].some((job) => job.projectId === input.projectId && job.status === 'running')) {
-    throw new Error('Un montage est déjà en cours pour ce projet.');
+    throw new Error('An edit is already running for this project.');
   }
   if (process.env.NODE_ENV === 'production' && [...jobs.values()].some(job => job.status === 'running')) {
-    throw new Error('Le studio traite déjà un montage. Réessayez une fois le rendu terminé.');
+    throw new Error('The studio is already processing an edit. Try again once that render finishes.');
   }
   const job: Job = {
     id: randomUUID(),

@@ -59,7 +59,7 @@ test('history discovers older revisions, preserves missing-file metadata and sur
     assert.equal(saved.find((job: { id: string }) => job.id === 'job_saved').result.verdict, 'REVISE');
     const interrupted = saved.find((job: { id: string }) => job.id === 'job_interrupted');
     assert.equal(interrupted.status, 'error');
-    assert.match(interrupted.error, /redémarrage/);
+    assert.match(interrupted.error, /server restart/);
 
     await writeFile(join(project, 'renders', 'assemble_2', 'manifest.json'), '{broken');
     const partial = await readLibrary();

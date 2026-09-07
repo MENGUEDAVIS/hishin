@@ -51,7 +51,7 @@ export function recoverJobs(): Job[] {
   return readSavedJobs().map((job) => {
     if (job.status === 'running') {
       job.status = 'error';
-      job.error = 'Montage interrompu par le redémarrage du serveur. Les rendus déjà produits restent dans l’historique.';
+      job.error = 'Edit interrupted by a server restart. Renders already produced remain in the history.';
       job.finishedAt = new Date().toISOString();
       saveJob(job);
     }
