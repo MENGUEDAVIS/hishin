@@ -1,47 +1,126 @@
 # HISHIN — The Agentic Video Production Desk
 
-Runs locally, no account or login required — clone it, follow
-[Installation](#installation) below, and it's ready. A separately hosted,
-multi-user deployment of this same core also exists at
+**AI decides what to cut. Deterministic tools decide where to cut.**
+
+## What this is
+
+You record several takes for a short video — some stronger than others,
+in no particular order, nothing a finished script read cleanly start to
+finish. HISHIN takes that raw footage plus a brief (what the video is
+for, target length) and:
+
+1. Transcribes and inspects every take (AWS Transcribe).
+2. Selects the strongest sentences across all of them — not take 1 then
+   take 2 then take 3, but whichever order actually tells the story,
+   judged by content.
+3. Cuts, subtitles, and mixes a real rendered video with deterministic
+   FFmpeg tooling — every cut is a measured timestamp, never a guess.
+4. Has a second agent critique the result against the brief (duration,
+   coherence, a real call to action, brand consistency from sampled
+   frames) and sends it back for another pass if it falls short.
+5. Keeps every version it ever produced — nothing overwrites a previous
+   attempt, nothing publishes silently.
+
+If the footage is missing something the brief needs — a call to action
+nobody actually said on camera — HISHIN can write that line and generate
+a real voice-over for it (Amazon Polly, word-timing measured, not
+estimated), but only if you explicitly allow it for that run.
+
+Built with the [Strands Agents SDK](https://strandsagents.com) and Amazon
+Bedrock: a **Director** agent (Claude Sonnet 4.6) plans the edit and
+calls a dozen typed tools wrapping a from-scratch FFmpeg pipeline; a
+**Critic** agent (Claude Haiku 4.5) evaluates the render and returns
+`PASS` or a structured `REVISE`. Full diagrams in
+[`ARCHITECTURE.md`](ARCHITECTURE.md).
+
+A separately hosted, multi-user deployment of this same core is live at
 https://hishin.globalnavigator.app.
 
-Architecture diagrams (system + the Director/Critic agent loop):
-[`ARCHITECTURE.md`](ARCHITECTURE.md). License: [MIT](LICENSE).
+## Quick start
 
-« AI decides what to cut. Deterministic tools decide where to cut. »
+**Prerequisites:**
+- Node.js 24, npm
+- FFmpeg and FFprobe on the `PATH` (macOS: `brew install ffmpeg`)
+- An AWS account with:
+  - Access enabled for the Bedrock models
+    `us.anthropic.claude-sonnet-4-6` and
+    `us.anthropic.claude-haiku-4-5-20251001-v1:0` in `us-east-1` (Bedrock
+    console → Model access)
+  - An S3 bucket for AWS Transcribe's scratch audio (any name; the app
+    writes under a `hishin/` prefix and never makes it public)
+  - Credentials available through the standard AWS SDK chain (env vars,
+    `~/.aws/credentials`, or an SSO profile — never pasted into this repo)
+
+```sh
+git clone https://github.com/MENGUEDAVIS/hishin.git
+cd hishin
+npm ci
+cp .env.example .env
+# edit .env: set TRANSCRIBE_S3_BUCKET to your bucket name
+npm run check:setup   # confirms Node/FFmpeg/FFprobe are all reachable
+npm run typecheck
+```
+
+Then, in two separate terminals:
+
+```sh
+npm run server    # http://127.0.0.1:3001
+npm run ui:dev     # http://localhost:5173
+```
+
+Open http://localhost:5173. No login, no account — you land straight on
+the Dashboard.
+
+## Try it end to end
+
+1. **New edit** → write a one-line brief (e.g. "a 30-second product
+   intro, hook, explanation, call to action") and a target duration.
+2. Drop in two or three real video takes (any phone footage works — a
+   few sentences per take is enough to see the selection behavior).
+3. Click **Import media**, then **Start the edit**.
+4. Watch **Edit progress** update live: the Director inspects the
+   footage, builds a plan, and calls `assemble_edit`; the Critic then
+   returns `PASS` or `REVISE` with concrete issues. A full round
+   (transcription + Bedrock calls + FFmpeg render) takes a few minutes.
+5. Open **History** to watch the render, see exactly which sentence from
+   which take was chosen for each segment and why, and read the Critic's
+   verdict. If it revises, every earlier attempt stays there too.
+
+Running the server/UI/upload without AWS credentials still works for
+ingesting footage and browsing the interface; starting an actual edit
+requires the AWS access described above (Bedrock + Transcribe, and
+Polly if narration is enabled for that run).
 
 ## Status
 
-All 6 steps of the original brief are implemented: the deterministic media
-pipeline (`01-ingest` through `07-mix`), Strands tools, Director/Critic
-agents on Amazon Bedrock, an Express server + React UI, scripted agent
-tests, and evaluation scripts. Tested under real conditions at every step
-(real AWS Transcribe and Bedrock, real videos, a real browser for the UI)
-— see `docs/architecture.md` for the detail of every validation.
+All 6 steps of the original project brief are implemented: the
+deterministic media pipeline (`01-ingest` through `07-mix`), Strands
+tools, Director/Critic agents on Bedrock, the Express server + React UI,
+scripted agent tests, and evaluation scripts — tested at every step under
+real conditions (real AWS Transcribe and Bedrock calls, real videos, a
+real browser for the UI). See [`docs/architecture.md`](docs/architecture.md)
+for the detailed validation log of every step, and
+[`docs/tool-contracts.md`](docs/tool-contracts.md) for each pipeline
+module's exact JSON contract.
 
-Post-delivery extension: a **script** field distinct from the brief (the
-text the take was meant to say on camera, used as a reference by the
-agent), **generated voice-over narration** (Amazon Polly — `08-narrate.js`,
-real word-by-word timing via speech marks) for a CTA or transition missing
-from the raw footage, and **uploaded photos** usable as segments or as the
+Beyond the original brief: a **script** field distinct from the brief
+(the text a take was meant to say on camera, used by the Director as a
+reference — not ground truth), **generated voice-over narration**
+(`08-narrate.js`, opt-in per run, real word-by-word timing via Polly
+speech marks), and **uploaded photos** usable as segments or as the
 visual behind a narration (`01b-ingest-photos.js`, `09-photo-clip.js`, a
-slow Ken Burns zoom, an optional burned-in caption). The editorial plan
-freely mixes all 3 segment types (`take` / `narration` / `photo`).
+Ken Burns zoom, an optional burned-in caption). The editorial plan mixes
+all 3 segment types (`take` / `narration` / `photo`) freely.
 
-See [the architecture, dependencies, and real run results](docs/architecture.md)
-and [the JSON contracts of every pipeline module](docs/tool-contracts.md).
+## Reference: CLI scripts and evaluation
 
 ```sh
-npm run check:setup       # Node 24, FFmpeg/FFprobe, AWS CLI
-npm run typecheck         # tsc --noEmit across the repo (JS included via JSDoc)
-npm test                  # unit + integration (real ffmpeg, skipped if absent)
-npm run test:agents       # scripted models; the narration scenario calls Amazon Polly
-node scripts/pipeline.js <module> --file input.json   # run one module in isolation
+node scripts/pipeline.js <module> --file input.json   # run one pipeline module in isolation
 
-# Full pipeline on real raw footage (ingest + real AWS Transcribe + derush)
+# Full pipeline on real footage (ingest + real AWS Transcribe + derush)
 node --env-file=.env scripts/run-project.js <projectId> <file1> <file2> ...
 
-# Director + Critic agents (Amazon Bedrock) looping until PASS or MAX_REVISION_ROUNDS
+# Director + Critic loop from the CLI, until PASS or MAX_REVISION_ROUNDS
 node --env-file=.env --import tsx scripts/run-director.ts \
   <projectId> "<brief>" <targetDurationSeconds> <mp4|mov> <take_id> [take_id...]
 
@@ -49,77 +128,43 @@ node --env-file=.env --import tsx scripts/run-director.ts \
 node --import tsx eval/timing.ts <manifest.json>
 node --import tsx eval/production-metrics.ts <projectId> <manifest.json> [subtitles.srt]
 
-# Server + UI (two separate processes; the UI proxies /api to the server)
-npm run server    # http://127.0.0.1:3001
-npm run ui:dev     # http://localhost:5173
+npm test                  # unit + integration (real ffmpeg, skipped if absent)
+npm run test:agents       # scripted models; the narration scenario calls real Amazon Polly
+npm run test:history      # history/job-restart behavior; no AWS needed
 ```
 
 ## Dashboard and edit history
 
-The UI has a **Dashboard**, **New edit**, and **History**. History lets you
-search past renders, filter by verdict, and open any version to watch the
-video, review the segments it kept, and read the agents' reasoning. The
-assembled cut and the final mix are viewable separately when both exist.
-The in-progress form is preserved when switching tabs (not across a page
-reload).
+**History** lets you search past renders, filter by verdict, and open any
+version to watch the video, review the segments it kept, and read the
+agents' reasoning. `GET /api/library` discovers projects and render
+manifests already present under `DATA_DIR/projects`, including ones
+produced earlier via the CLI — older videos stay visible even without an
+agent review record, and missing information or deleted files are called
+out explicitly rather than hidden.
 
-`GET /api/library` discovers projects and render manifests already present
-under `DATA_DIR/projects`, including ones produced earlier via the CLI.
-Older videos stay visible even without an agent review record; missing
-information is called out explicitly. Deleted video files are flagged as
-unavailable.
+Server sessions are saved atomically to `projects/<id>/jobs/<jobId>.json`.
+A restart marks any unfinished session as errored rather than silently
+resuming it. Only one edit per project can run at a time.
 
-New server sessions are saved atomically to `projects/<id>/jobs/<jobId>.json`.
-A restart marks any unfinished sessions as errored rather than silently
-resuming the agents. Only one job per project can be active on the server
-at a time. Each subsequent iteration keeps the Director's decisions and the
-Critic's evaluation in the render's `review.json`; previously written
-decisions stay accessible even if a later evaluation fails.
-
-```sh
-npm run test:history  # older versions, missing files, restart behavior; no AWS needed
-npm run ui:build      # build the UI
-```
-
-After changing the backend, restart `npm run server`. For an isolated
-preview without interrupting an existing server:
-
-```sh
-PORT=3002 npm run server
-API_PROXY_TARGET=http://127.0.0.1:3002 npm run ui:dev -- --host 127.0.0.1 --port 5174
-```
-
-## Installation
-
-Prerequisites: Node.js 24, npm, FFmpeg and FFprobe on the PATH. On macOS
-with Homebrew: `brew install ffmpeg`.
-
-```sh
-npm ci
-cp .env.example .env
-npm run check:setup
-npm run typecheck
-```
-
-`check:setup` doesn't contact AWS and exits non-zero if a required media
-tool is missing. `npm test` covers the pipeline (unit + real ffmpeg
-integration); `npm run test:agents` covers the agents with a scripted
-model — its narration scenario calls real Amazon Polly.
-
-## AWS
+## AWS details
 
 The SDK uses the standard AWS credential chain, including CLI profiles.
-Region: `us-east-1`. `TRANSCRIBE_S3_BUCKET` points to a dedicated S3
-bucket (public access blocked, AES256 encryption, automatic 7-day
-expiration under the `hishin/` prefix), and
-`BEDROCK_DIRECTOR_MODEL_ID`/`BEDROCK_CRITIC_MODEL_ID` reference Bedrock
-inference profiles verified available for this account
-(`us.anthropic.claude-sonnet-4-6` and
-`us.anthropic.claude-haiku-4-5-20251001-v1:0` — Claude 3.5 didn't appear
-in the queried regional catalog). These three values, the
-`bedrock-runtime converse` call, and a full Director/Critic run were all
-tested with real AWS calls, not just a catalog read.
+Region: `us-east-1`. `TRANSCRIBE_S3_BUCKET` should point at a bucket with
+public access blocked; the app writes scratch audio under a `hishin/`
+prefix and doesn't delete it itself — add a lifecycle rule on the bucket
+(e.g. expire objects under that prefix after 7 days) if you want it
+cleaned up automatically. `BEDROCK_DIRECTOR_MODEL_ID`
+and `BEDROCK_CRITIC_MODEL_ID` must reference models your account actually
+has Bedrock access to — `us.anthropic.claude-sonnet-4-6` and
+`us.anthropic.claude-haiku-4-5-20251001-v1:0` are what this project was
+built and tested against.
 
-Renders run locally; Bedrock and AWS Transcribe are called remotely.
-Required permissions are limited to the chosen model, Transcribe jobs, and
-the project's S3 prefix. AWS credentials stay server-side.
+Renders run locally; Bedrock, Transcribe, and (opt-in) Polly are called
+remotely. Required IAM permissions are limited to the chosen Bedrock
+models, Transcribe jobs, and the project's S3 prefix. AWS credentials
+never leave the server process.
+
+## License
+
+[MIT](LICENSE).
