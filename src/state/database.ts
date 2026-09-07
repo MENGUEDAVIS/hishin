@@ -17,6 +17,7 @@ export async function openProjectDb(projectId: string): Promise<DatabaseSync> {
   const file = stateDbFile(projectId);
   await mkdir(dirname(file), { recursive: true });
   const db = new DatabaseSync(file);
+  db.exec('PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL; PRAGMA busy_timeout=5000;');
   db.exec(`
     CREATE TABLE IF NOT EXISTS agent_runs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -1,5 +1,8 @@
 # HI-SHIN — The Agentic Video Production Desk
 
+Déploiement, Cognito, isolation des utilisateurs et estimation des coûts :
+[guide de production](docs/production.md). La branche `prod` contient cette version.
+
 « AI decides what to cut. Deterministic tools decide where to cut. »
 
 ## État

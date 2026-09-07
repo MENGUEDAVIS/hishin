@@ -26,7 +26,7 @@ export function ffprobePath() {
  */
 function run(executable, args, opts = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(executable, args, { shell: false, timeout: opts.timeoutMs ?? 120_000 });
+    const child = spawn(executable, args, { shell: false, timeout: opts.timeoutMs ?? Number(process.env.MEDIA_TIMEOUT_MS || 120_000) });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', (chunk) => {
@@ -56,7 +56,7 @@ function run(executable, args, opts = {}) {
  * @returns {Promise<RunResult>}
  */
 export function runFfmpeg(args, opts) {
-  return run(ffmpegPath(), args, opts);
+  return run(ffmpegPath(), process.env.NODE_ENV === 'production' ? ['-protocol_whitelist', 'file,pipe', '-threads', '1', ...args] : args, opts);
 }
 
 /**
@@ -65,7 +65,7 @@ export function runFfmpeg(args, opts) {
  * @returns {Promise<RunResult>}
  */
 export function runFfprobe(args, opts) {
-  return run(ffprobePath(), args, opts);
+  return run(ffprobePath(), process.env.NODE_ENV === 'production' ? ['-protocol_whitelist', 'file,pipe', '-format_whitelist', 'mov,matroska,avi,image2,jpeg_pipe,png_pipe,webp_pipe,wav,mp3,flac,ogg', ...args] : args, opts);
 }
 
 /**

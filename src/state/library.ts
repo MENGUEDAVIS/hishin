@@ -62,7 +62,7 @@ export interface ProjectSummary {
 }
 
 /** Discover the existing on-disk manifests, including CLI renders predating the UI. */
-export async function readLibrary(): Promise<{ projects: ProjectSummary[]; renders: RenderVersion[]; warnings: string[] }> {
+export async function readLibrary(allowedProjects?: Set<string>): Promise<{ projects: ProjectSummary[]; renders: RenderVersion[]; warnings: string[] }> {
   const root = join(dataDir(), 'projects');
   const projects: ProjectSummary[] = [];
   const renders: RenderVersion[] = [];
@@ -76,6 +76,7 @@ export async function readLibrary(): Promise<{ projects: ProjectSummary[]; rende
   for (const directory of directories) {
     if (!directory.isDirectory() || !idPattern.test(directory.name)) continue;
     const projectId = directory.name;
+    if (allowedProjects && !allowedProjects.has(projectId)) continue;
     const base = projectDir(projectId);
     const summary: ProjectSummary = {
       projectId, takeCount: 0, photoCount: 0, renderCount: 0,

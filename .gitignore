@@ -15,3 +15,6 @@ data/*
 *.sqlite-wal
 *.log
 .DS_Store
+infra/deployment.json
+infra/source.zip
+infra/.build-*

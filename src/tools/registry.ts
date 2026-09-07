@@ -24,8 +24,7 @@ import { createResolveSegmentsTool } from './resolve-segments.js';
  */
 export function createDirectorTools(projectId: string, sink: RunSink): ToolList {
   return [
-    createIngestTool(projectId),
-    createIngestPhotosTool(projectId),
+    ...(process.env.NODE_ENV === 'production' ? [] : [createIngestTool(projectId), createIngestPhotosTool(projectId)]),
     createTranscribeTool(projectId),
     createDerushTool(projectId),
     createTightenTool(projectId),

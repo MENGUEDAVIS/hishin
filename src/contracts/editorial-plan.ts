@@ -76,9 +76,9 @@ export type EditorialSegment = z.infer<typeof EditorialSegmentSchema>;
 
 export const BrandConfigSchema = z
   .object({
-    width: z.number().int().positive().optional(),
-    height: z.number().int().positive().optional(),
-    fps: z.number().int().positive().optional(),
+    width: z.number().int().positive().max(1920).optional(),
+    height: z.number().int().positive().max(1920).optional(),
+    fps: z.number().int().positive().max(30).optional(),
   })
   .passthrough();
 
@@ -89,7 +89,7 @@ export const EditorialPlanSchema = z.object({
   brand_config: BrandConfigSchema.optional(),
   segments: z
     .array(EditorialSegmentSchema)
-    .min(1)
+    .min(1).max(60)
     .describe('Ordered final cut: hook segment(s) first, then body, then cta. Mix kinds freely.'),
 });
 export type EditorialPlan = z.infer<typeof EditorialPlanSchema>;

@@ -1,0 +1,9 @@
+.git
+.env*
+node_modules
+data
+*.mov
+*.mp4
+ui/dist
+infra/deployment.json
+infra/source.zip

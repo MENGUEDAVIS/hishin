@@ -50,15 +50,15 @@ const EditPlanSchema = z.object({
   output_format: z.enum(['mp4', 'mov']).default('mp4'),
   brand_config: z
     .object({
-      width: z.number().int().positive().optional(),
-      height: z.number().int().positive().optional(),
-      fps: z.number().int().positive().optional(),
+      width: z.number().int().positive().max(1920).optional(),
+      height: z.number().int().positive().max(1920).optional(),
+      fps: z.number().int().positive().max(30).optional(),
     })
     .passthrough()
     .optional(),
   segments: z
     .array(z.discriminatedUnion('kind', [TakeSegmentSchema, NarrationSegmentSchema, PhotoSegmentSchema]))
-    .min(1),
+    .min(1).max(60),
 });
 
 const AssembleInputSchema = z.object({

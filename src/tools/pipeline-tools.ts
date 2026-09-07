@@ -1,3 +1,5 @@
+import { withinDirectory } from '../server/access.js';
+import { projectDir } from '../media/paths.js';
 import { tool } from '@strands-agents/sdk';
 import { z } from 'zod';
 import type { RunSink } from '../agents/run-sink.js';
@@ -91,6 +93,7 @@ export function createSubtitlesTool(projectId: string, sink: RunSink) {
       'Call this after assemble_edit, passing the manifest_path it returned.',
     inputSchema: z.object({ manifest_path: z.string().min(1) }),
     callback: async ({ manifest_path }) => {
+      await withinDirectory(projectDir(projectId), manifest_path);
       const result = await generateSubtitles({ project_id: projectId, manifest_path });
       sink.subtitleResults.push(result);
       return result;
@@ -135,6 +138,9 @@ export function createMixTool(projectId: string, sink: RunSink) {
       target_lufs: z.number().optional(),
     }),
     callback: async ({ video_path, music, subtitles_path, target_lufs }) => {
+      await withinDirectory(projectDir(projectId), video_path);
+      if (music) await withinDirectory(projectDir(projectId), music.stored_path);
+      if (subtitles_path) await withinDirectory(projectDir(projectId), subtitles_path);
       const result = await mix({ project_id: projectId, video_path, music, subtitles_path, target_lufs });
       sink.mixResults.push(result);
       return result;

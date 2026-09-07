@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
-import { readFile, rm, stat } from 'node:fs/promises';
+import { readFile, rm, stat, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { extname, isAbsolute, join, relative, resolve } from 'node:path';
 import { Router } from 'express';
@@ -8,10 +8,13 @@ import multer from 'multer';
 import { z } from 'zod';
 import { ingest } from '../pipeline/01-ingest.js';
 import { ingestPhotos } from '../pipeline/01b-ingest-photos.js';
-import { dataDir, photosDir, rawDir, tracesFile } from '../media/paths.js';
+import { dataDir, projectDir, photosDir, rawDir, tracesFile } from '../media/paths.js';
 import { listRuns } from '../state/project-store.js';
 import { getJob, listJobs, listJobsForProject, startJob } from './jobs.js';
 import { readLibrary } from '../state/library.js';
+import { requireAuth, type AuthedRequest } from './auth.js';
+import { canAccessProject, checkOrigin, localMode, projectAccess, withinDirectory } from './access.js';
+import { listProjectIdsForOwner, recordProjectOwnerIfAbsent } from '../state/ownership.js';
 
 const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.tiff']);
 
@@ -46,11 +49,18 @@ function isValidProjectId(value: string): boolean {
 }
 
 export const apiRouter = Router();
+apiRouter.use(requireAuth, checkOrigin);
+apiRouter.get('/me', (req: AuthedRequest, res) => res.json({ user: req.user, local: localMode() }));
+apiRouter.use('/projects/:projectId', (req, res, next) => {
+  if (req.params.projectId === 'upload') { next(); return; }
+  void projectAccess(req, res, next).catch(next);
+});
 
-apiRouter.get('/library', async (_req, res) => {
+apiRouter.get('/library', async (req: AuthedRequest, res) => {
   try {
-    const library = await readLibrary();
-    res.json({ ...library, jobs: listJobs() });
+    const allowed = localMode() ? undefined : new Set(await listProjectIdsForOwner(req.user!.id));
+    const library = await readLibrary(allowed);
+    res.json({ ...library, jobs: listJobs().filter(job => !allowed || allowed.has(job.projectId)) });
   } catch {
     res.status(500).json({ error: 'Impossible de lire l’historique des montages.' });
   }
@@ -71,7 +81,11 @@ const upload = multer({
     destination: uploadStagingDir,
     filename: (_req, file, callback) => callback(null, `${randomUUID()}${extname(file.originalname)}`),
   }),
-  limits: { fileSize: 5 * 1024 * 1024 * 1024 },
+  limits: { fileSize: Number(process.env.MAX_UPLOAD_MB || 500) * 1024 * 1024, files: 10, fields: 2 },
+  fileFilter: (_req, file, callback) => {
+    if (!/\.(mov|mp4|m4v|avi|mkv|jpe?g|png|webp)$/i.test(file.originalname)) { callback(new Error('Format de fichier non autorisé.')); return; }
+    callback(null, true);
+  },
 });
 
 /**
@@ -82,7 +96,7 @@ const upload = multer({
  * paths) stays around for scripted/CLI callers that already have files on
  * the server's filesystem.
  */
-apiRouter.post('/projects/upload', upload.array('files'), async (req, res) => {
+apiRouter.post('/projects/upload', upload.array('files'), async (req: AuthedRequest, res) => {
   const files = req.files;
   if (!Array.isArray(files) || files.length === 0) {
     res.status(400).json({ error: 'no files uploaded' });
@@ -95,12 +109,17 @@ apiRouter.post('/projects/upload', upload.array('files'), async (req, res) => {
     await Promise.allSettled(files.map((f) => rm(f.path, { force: true })));
     return;
   }
-  const projectId = projectIdRaw || `proj_${randomUUID().slice(0, 8)}`;
+  const projectId = localMode() ? projectIdRaw || `proj_${randomUUID()}` : `proj_${randomUUID()}`;
 
   const videoFiles = files.filter((f) => !isImageFile(f));
   const photoFiles = files.filter(isImageFile);
 
   try {
+    if (!localMode()) {
+      await mkdir(resolve(dataDir(), 'projects'), { recursive: true });
+      await mkdir(projectDir(projectId));
+      await recordProjectOwnerIfAbsent(projectId, req.user!.id);
+    }
     const [videoResult, photoResult] = await Promise.all([
       videoFiles.length > 0
         ? ingest({ projectId, sources: videoFiles.map((f) => ({ path: f.path })) })
@@ -123,6 +142,7 @@ apiRouter.post('/projects/upload', upload.array('files'), async (req, res) => {
 });
 
 apiRouter.post('/projects', async (req, res) => {
+  if (!localMode()) { res.status(403).json({ error: 'Import par chemin serveur désactivé. Utilisez l’upload.' }); return; }
   const schema = z.object({
     projectId: z.string().regex(PROJECT_ID).optional(),
     sources: z
@@ -164,9 +184,9 @@ apiRouter.post('/projects/:projectId/runs', async (req, res) => {
     return;
   }
   const schema = z.object({
-    brief: z.string().min(1),
-    script: z.string().min(1).optional(),
-    targetDurationSeconds: z.number().positive(),
+    brief: z.string().min(1).max(10000),
+    script: z.string().min(1).max(20000).optional(),
+    targetDurationSeconds: z.number().positive().max(300),
     outputFormat: z.enum(['mp4', 'mov']).default('mp4'),
     takeIds: z.array(z.string().regex(PROJECT_ID)).min(1),
   });
@@ -231,7 +251,7 @@ apiRouter.get('/projects/:projectId/costs', async (req, res) => {
  * path. `path` is expected to be exactly what a pipeline result already
  * returned (e.g. `data/projects/<id>/renders/.../final.mp4`).
  */
-apiRouter.get('/media', async (req, res) => {
+apiRouter.get('/media', async (req: AuthedRequest, res) => {
   const requested = req.query.path;
   if (typeof requested !== 'string' || requested.length === 0) {
     res.status(400).json({ error: 'path query param required' });
@@ -244,7 +264,13 @@ apiRouter.get('/media', async (req, res) => {
     res.status(403).json({ error: 'path escapes the data directory' });
     return;
   }
+  const parts = rel.split(/[\\/]/);
+  const projectId = parts[0] === 'projects' ? parts[1] : undefined;
+  if (!projectId || !await canAccessProject(req.user!.id, projectId) || !/\.(mp4|mov|m4v|jpg|jpeg|png|webp|srt|vtt)$/i.test(resolved)) {
+    res.status(404).json({ error: 'Média introuvable.' }); return;
+  }
   try {
+    await withinDirectory(projectDir(projectId), resolved);
     await stat(resolved);
   } catch {
     res.status(404).json({ error: 'file not found' });

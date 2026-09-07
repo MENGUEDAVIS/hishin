@@ -21,6 +21,14 @@ export function dataDir() {
   return process.env.DATA_DIR || './data';
 }
 
+/**
+ * Global (not per-project) database: user profiles and project ownership.
+ * @returns {string}
+ */
+export function appDbFile() {
+  return join(dataDir(), 'app.sqlite');
+}
+
 /** @param {string} projectId @returns {string} */
 export function projectDir(projectId) {
   assertSafeId(projectId, 'projectId');
