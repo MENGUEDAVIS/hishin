@@ -1,0 +1,17 @@
+node_modules/
+dist/
+coverage/
+
+# Personal/sample raw footage dropped at the repo root for local testing —
+# never source code, not meant to be committed.
+/prise*.mov
+.env
+.env.*
+!.env.example
+data/*
+!data/.gitkeep
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.log
+.DS_Store

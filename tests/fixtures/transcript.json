@@ -1,0 +1,19 @@
+{
+  "jobName": "hishin-fixture-take_01",
+  "results": {
+    "transcripts": [{ "transcript": "Bonjour tout le monde. On lance le produit aujourd'hui." }],
+    "items": [
+      { "type": "pronunciation", "start_time": "0.000", "end_time": "0.400", "alternatives": [{ "content": "Bonjour", "confidence": "0.98" }] },
+      { "type": "pronunciation", "start_time": "0.450", "end_time": "0.700", "alternatives": [{ "content": "tout", "confidence": "0.97" }] },
+      { "type": "pronunciation", "start_time": "0.700", "end_time": "0.850", "alternatives": [{ "content": "le", "confidence": "0.96" }] },
+      { "type": "pronunciation", "start_time": "0.850", "end_time": "1.200", "alternatives": [{ "content": "monde", "confidence": "0.98" }] },
+      { "type": "punctuation", "alternatives": [{ "content": "." }] },
+      { "type": "pronunciation", "start_time": "1.900", "end_time": "2.100", "alternatives": [{ "content": "On", "confidence": "0.95" }] },
+      { "type": "pronunciation", "start_time": "2.100", "end_time": "2.350", "alternatives": [{ "content": "lance", "confidence": "0.96" }] },
+      { "type": "pronunciation", "start_time": "2.350", "end_time": "2.500", "alternatives": [{ "content": "le", "confidence": "0.94" }] },
+      { "type": "pronunciation", "start_time": "2.500", "end_time": "2.950", "alternatives": [{ "content": "produit", "confidence": "0.97" }] },
+      { "type": "pronunciation", "start_time": "2.950", "end_time": "3.400", "alternatives": [{ "content": "aujourd'hui", "confidence": "0.95" }] },
+      { "type": "punctuation", "alternatives": [{ "content": "." }] }
+    ]
+  }
+}
