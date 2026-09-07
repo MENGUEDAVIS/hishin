@@ -1,19 +1,14 @@
 # HI-SHIN — The Agentic Video Production Desk
 
-Déploiement, Cognito, isolation des utilisateurs et estimation des coûts :
-[guide de production](docs/production.md). La branche `prod` contient cette version.
-Démo en ligne : https://hishin.globalnavigator.app
+Runs locally, no account or login required — clone it, follow
+[Installation](#installation) below, and it's ready. A separately hosted,
+multi-user deployment of this same core also exists at
+https://hishin.globalnavigator.app.
+
+Architecture diagrams (system + the Director/Critic agent loop):
+[`ARCHITECTURE.md`](ARCHITECTURE.md). License: [MIT](LICENSE).
 
 « AI decides what to cut. Deterministic tools decide where to cut. »
-
-## Hackathon (Agents for Humans)
-
-- [`ARCHITECTURE.md`](ARCHITECTURE.md) — diagrammes système et boucle agent
-- [`docs/hackathon/submission-brief.md`](docs/hackathon/submission-brief.md) — texte de soumission Devpost
-- [`docs/hackathon/agentcore-decision.md`](docs/hackathon/agentcore-decision.md) — pourquoi pas AgentCore
-- Trois brouillons d'articles builder.aws (bonus) : [`blog-01`](docs/hackathon/blog-01-timestamp-rule.md),
-  [`blog-02`](docs/hackathon/blog-02-deploying-without-agentcore.md),
-  [`blog-03`](docs/hackathon/blog-03-scrambled-takes.md)
 
 ## État
 
