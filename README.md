@@ -91,48 +91,6 @@ ingesting footage and browsing the interface; starting an actual edit
 requires the AWS access described above (Bedrock + Transcribe, and
 Polly if narration is enabled for that run).
 
-## Status
-
-All 6 steps of the original project brief are implemented: the
-deterministic media pipeline (`01-ingest` through `07-mix`), Strands
-tools, Director/Critic agents on Bedrock, the Express server + React UI,
-scripted agent tests, and evaluation scripts — tested at every step under
-real conditions (real AWS Transcribe and Bedrock calls, real videos, a
-real browser for the UI). See [`docs/architecture.md`](docs/architecture.md)
-for the detailed validation log of every step, and
-[`docs/tool-contracts.md`](docs/tool-contracts.md) for each pipeline
-module's exact JSON contract.
-
-Beyond the original brief: a **script** field distinct from the brief
-(the text a take was meant to say on camera, used by the Director as a
-reference — not ground truth), **generated voice-over narration**
-(`08-narrate.js`, opt-in per run, real word-by-word timing via Polly
-speech marks), and **uploaded photos** usable as segments or as the
-visual behind a narration (`01b-ingest-photos.js`, `09-photo-clip.js`, a
-Ken Burns zoom, an optional burned-in caption). The editorial plan mixes
-all 3 segment types (`take` / `narration` / `photo`) freely.
-
-## Reference: CLI scripts and evaluation
-
-```sh
-node scripts/pipeline.js <module> --file input.json   # run one pipeline module in isolation
-
-# Full pipeline on real footage (ingest + real AWS Transcribe + derush)
-node --env-file=.env scripts/run-project.js <projectId> <file1> <file2> ...
-
-# Director + Critic loop from the CLI, until PASS or MAX_REVISION_ROUNDS
-node --env-file=.env --import tsx scripts/run-director.ts \
-  <projectId> "<brief>" <targetDurationSeconds> <mp4|mov> <take_id> [take_id...]
-
-# Evaluate an already-produced render
-node --import tsx eval/timing.ts <manifest.json>
-node --import tsx eval/production-metrics.ts <projectId> <manifest.json> [subtitles.srt]
-
-npm test                  # unit + integration (real ffmpeg, skipped if absent)
-npm run test:agents       # scripted models; the narration scenario calls real Amazon Polly
-npm run test:history      # history/job-restart behavior; no AWS needed
-```
-
 ## Dashboard and edit history
 
 **History** lets you search past renders, filter by verdict, and open any
