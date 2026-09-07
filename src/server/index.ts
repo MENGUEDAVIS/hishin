@@ -34,13 +34,30 @@ app.use(express.json({ limit: '64kb' }));
 app.use('/api', apiRouter);
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Endpoint introuvable.' }));
 
-app.use(requireAuth, express.static(resolve('ui/dist')));
-app.get('/', requireAuth, (_req, res) => res.sendFile(resolve('ui/dist/index.html')));
+// Public marketing page — the ALB's PublicPages rule exempts the exact "/"
+// path from Cognito auth, so this must stay a single self-contained file
+// (inline CSS/JS/images) with no separate asset requests, which would
+// otherwise hit the auth-gated default rule and force a login redirect for
+// a stylesheet.
+app.get('/', (_req, res) => res.sendFile(resolve('ui/dist/landing.html')));
+
+// The actual product lives under /app, which the ALB's default rule keeps
+// behind Cognito auth (see infra/production.json). ui/vite.config.ts builds
+// with base: '/app/' so its asset URLs already point here.
+app.use('/app', requireAuth, express.static(resolve('ui/dist')));
+app.get(/^\/app(\/.*)?$/, requireAuth, (_req, res) => res.sendFile(resolve('ui/dist/index.html')));
 app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   logger.error({ err: error }, 'Request failed');
   res.status(400).json({ error: 'Requête refusée ou traitement impossible.' });
 });
 
-app.listen(serverConfig.port, serverConfig.host, () => {
+const server = app.listen(serverConfig.port, serverConfig.host, () => {
   logger.info({ host: serverConfig.host, port: serverConfig.port }, 'HI-SHIN server listening');
 });
+
+// Node's default requestTimeout (5 minutes) counts the whole request,
+// including large multipart video uploads on a slow connection — past it,
+// Node itself aborts the socket with a 408 before the upload route ever
+// runs. Raised to cover MAX_UPLOAD_MB-sized uploads at realistic upload
+// speeds; headersTimeout is left at its default since only the body is slow.
+server.requestTimeout = 30 * 60 * 1000;

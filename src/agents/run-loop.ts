@@ -18,6 +18,8 @@ export interface OrchestrateInput {
   takeIds: string[];
   /** Uploaded photo_ids available for photo/narration segments. */
   photoIds?: string[];
+  /** Opt-in only: whether the Director may generate Polly voice-over narration for this run. */
+  allowNarration?: boolean;
 }
 
 export interface OrchestrateRound {
@@ -58,6 +60,7 @@ export async function orchestrate(input: OrchestrateInput): Promise<OrchestrateR
       ...(input.script ? { script: input.script } : {}),
       ...(input.photoIds ? { photoIds: input.photoIds } : {}),
       ...(revisionNotes ? { revisionNotes } : {}),
+      allowNarration: input.allowNarration ?? false,
     });
 
     const directorUsage = directorAgent.metrics.accumulatedUsage;

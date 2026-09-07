@@ -97,11 +97,29 @@ export interface CostRow {
   created_at: string;
 }
 
+/**
+ * A 401 from this server only ever means one thing (see requireAuth in
+ * src/server/auth.ts): the ALB session is gone. There's no in-app recovery
+ * from that — polling on it forever just spams the console — so the one
+ * correct response anywhere in the app is a hard navigation back through the
+ * load balancer, which re-triggers real Cognito login. Guarded to fire once:
+ * several polls in flight can all see the 401 before the navigation lands.
+ */
+let redirectingToLogin = false;
+function handleUnauthorized(): never {
+  if (!redirectingToLogin) {
+    redirectingToLogin = true;
+    window.location.href = '/app';
+  }
+  throw new Error('Session expired — redirecting to log in.');
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${BASE}${path}`, {
     ...init,
     headers: { 'Content-Type': 'application/json', ...init?.headers },
   });
+  if (response.status === 401) handleUnauthorized();
   const body = (await response.json().catch(() => ({}))) as T & { error?: string };
   if (!response.ok) {
     throw new Error(body.error ?? `HTTP ${response.status}`);
@@ -137,6 +155,14 @@ export function uploadProject(
       if (event.lengthComputable) onProgress(event.loaded / event.total);
     };
     xhr.onload = () => {
+      if (xhr.status === 401) {
+        try {
+          handleUnauthorized();
+        } catch (error) {
+          reject(error);
+        }
+        return;
+      }
       let body: (ProjectManifest & { error?: string }) | undefined;
       try {
         body = JSON.parse(xhr.responseText);
@@ -166,6 +192,7 @@ export function startRun(
     targetDurationSeconds: number;
     outputFormat: 'mp4' | 'mov';
     takeIds: string[];
+    allowNarration?: boolean;
   },
 ): Promise<{ jobId: string; status: string }> {
   return request(`/projects/${projectId}/runs`, { method: 'POST', body: JSON.stringify(input) });

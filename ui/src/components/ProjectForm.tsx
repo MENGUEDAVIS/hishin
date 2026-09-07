@@ -30,6 +30,7 @@ export function ProjectForm({ onIngested, onRunStarted, manifest, running = fals
   const [script, setScript] = useState('');
   const [targetDurationSeconds, setTargetDurationSeconds] = useState(45);
   const [outputFormat, setOutputFormat] = useState<'mp4' | 'mov'>('mp4');
+  const [allowNarration, setAllowNarration] = useState(false);
 
   const [files, setFiles] = useState<File[]>([]);
   const [dragActive, setDragActive] = useState(false);
@@ -93,6 +94,7 @@ export function ProjectForm({ onIngested, onRunStarted, manifest, running = fals
         targetDurationSeconds,
         outputFormat,
         takeIds: selectedTakeIds,
+        allowNarration,
       });
       onRunStarted(jobId);
     } catch (error) {
@@ -145,6 +147,22 @@ export function ProjectForm({ onIngested, onRunStarted, manifest, running = fals
               <option value="mov">mov</option>
             </select>
           </div>
+        </div>
+
+        <div className="take-list" style={{ marginBottom: '1rem' }}>
+          <label htmlFor="allowNarration" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
+            <input
+              id="allowNarration"
+              type="checkbox"
+              checked={allowNarration}
+              onChange={(e) => setAllowNarration(e.target.checked)}
+            />
+            Allow generated voice-over narration
+          </label>
+          <p className="subtitle" style={{ margin: 0 }}>
+            Off by default. When on, the Director may write and voice a line (Amazon Polly) for a hook or call to
+            action your footage doesn't cover. Leave it off to only ever use your real footage.
+          </p>
         </div>
 
         {!manifest && (

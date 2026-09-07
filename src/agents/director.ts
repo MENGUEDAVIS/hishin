@@ -1,6 +1,6 @@
 import { Agent, BedrockModel, type Model } from '@strands-agents/sdk';
 import { createRunSink, type RunSink } from './run-sink.js';
-import { DIRECTOR_SYSTEM_PROMPT } from './prompts.js';
+import { buildDirectorSystemPrompt } from './prompts.js';
 import { createDirectorTools } from '../tools/registry.js';
 
 export interface DirectorRunInput {
@@ -14,6 +14,12 @@ export interface DirectorRunInput {
   /** Uploaded photo_ids available for photo/narration segments. */
   photoIds?: string[];
   revisionNotes?: string;
+  /**
+   * Opt-in only: without this, list_voices/synthesize_narration are withheld
+   * from the Director entirely, so a generated voice-over can never appear
+   * in an edit the human didn't explicitly allow it for.
+   */
+  allowNarration?: boolean;
   /** Test-only override — injects a scripted Model instead of real Bedrock. */
   model?: Model;
 }
@@ -29,18 +35,18 @@ function defaultDirectorModel(): Model {
   });
 }
 
-function createDirectorAgent(projectId: string, sink: RunSink, model: Model): Agent {
+function createDirectorAgent(projectId: string, sink: RunSink, model: Model, allowNarration: boolean): Agent {
   return new Agent({
     name: 'hi-shin-director',
     model,
-    systemPrompt: DIRECTOR_SYSTEM_PROMPT,
-    tools: createDirectorTools(projectId, sink),
+    systemPrompt: buildDirectorSystemPrompt({ allowNarration }),
+    tools: createDirectorTools(projectId, sink, { allowNarration }),
   });
 }
 
 export async function runDirector(input: DirectorRunInput) {
   const sink = createRunSink();
-  const agent = createDirectorAgent(input.projectId, sink, input.model ?? defaultDirectorModel());
+  const agent = createDirectorAgent(input.projectId, sink, input.model ?? defaultDirectorModel(), input.allowNarration ?? false);
 
   const prompt = [
     `Project brief (creative direction): ${input.brief}`,

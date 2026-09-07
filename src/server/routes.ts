@@ -189,6 +189,8 @@ apiRouter.post('/projects/:projectId/runs', async (req, res) => {
     targetDurationSeconds: z.number().positive().max(300),
     outputFormat: z.enum(['mp4', 'mov']).default('mp4'),
     takeIds: z.array(z.string().regex(PROJECT_ID)).min(1),
+    // Opt-in only: without this, the Director cannot generate Polly narration for this run.
+    allowNarration: z.boolean().default(false),
   });
   try {
     const { script, ...body } = schema.parse(req.body);

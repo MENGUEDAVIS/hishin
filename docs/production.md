@@ -3,10 +3,14 @@
 ## Architecture et coût
 
 Région us-east-1, VPC par défaut. ECS Fargate Linux x86 : une tâche **0,5 vCPU / 2 Go**,
-ALB HTTPS, Cognito Lite (inscription e-mail, connexion, récupération de mot de passe),
+ALB HTTPS, Cognito **Essentials** (Managed Login v2 avec branding personnalisé —
+logo, couleurs de la marque — inscription e-mail, connexion, récupération de mot de passe),
 EFS chiffré pour médias/SQLite, ECR pour les images, CodeBuild pour compiler sans Docker local.
 Pas de NAT Gateway : IP publique de tâche, mais entrée réseau uniquement depuis le
 security group de l'ALB. EFS accepte uniquement le security group de la tâche et monte en TLS.
+
+`/` est exempté de l'authentification (page marketing statique, un seul fichier HTML
+auto-contenu) ; `/app` (SPA React) et `/api/*` restent entièrement derrière Cognito.
 
 Estimation au 7 septembre 2026, 730 heures/mois, faible trafic, 10 Go EFS :
 
@@ -22,9 +26,12 @@ Estimation au 7 septembre 2026, 730 heures/mois, faible trafic, 10 Go EFS :
 Hors Bedrock, Transcribe, Polly, taxes, trafic sortant important, croissance du stockage,
 builds ponctuels et éventuel dépassement du palier gratuit Cognito. Ce n'est pas un plafond.
 La zone Route 53 existe déjà. Les alias DNS vers ALB n'ajoutent pas une nouvelle zone.
-Cognito Lite bénéficie de 10 000 MAU gratuits par compte/organisation si ce quota n'est
-pas déjà consommé. L'envoi d'e-mails par défaut de Cognito convient à un petit lancement ;
-prévoir SES configuré pour un volume d'inscriptions plus élevé.
+Cognito Essentials bénéficie des mêmes 10 000 MAU gratuits par compte/organisation que
+Lite (au-delà, Essentials facture 0,015 $/MAU contre un tarif dégressif pour Lite —
+sans impact réel à l'échelle de ce projet). Le passage à Essentials était nécessaire
+pour l'éditeur de branding Managed Login (indisponible sur Lite). L'envoi d'e-mails
+par défaut de Cognito convient à un petit lancement ; prévoir SES configuré pour un
+volume d'inscriptions plus élevé.
 
 Sources : [Fargate](https://aws.amazon.com/fargate/pricing/),
 [ALB](https://aws.amazon.com/elasticloadbalancing/pricing/),
@@ -41,7 +48,12 @@ managé explicitement autorisé. [Bundles Lightsail](https://docs.aws.amazon.com
 ## Sessions et isolation
 
 L'ALB redirige le navigateur vers Cognito et gère un cookie Secure/HttpOnly, session
-d'une heure. `/logout` efface les fragments du cookie ALB et termine la session Cognito.
+de 8 heures (`SessionTimeout`, relevé après une session d'une heure jugée trop courte
+pour des rounds Director/Critic de plusieurs minutes suivis d'une revue). `/logout`
+efface les fragments du cookie ALB et termine la session Cognito. Côté client, tout
+appel API recevant un 401 déclenche une redirection immédiate vers `/app` plutôt que
+de rester à re-tenter silencieusement (`ui/src/api.ts`) — un 401 ne signifie jamais
+autre chose qu'une session morte.
 Les requêtes API sans session obtiennent 401. L'application vérifie la signature ES256
 ALB (y compris son format base64url avec padding), signer, client et expiration.
 Le `sub` signé est l'identité, jamais un en-tête utilisateur libre.
@@ -60,10 +72,21 @@ Les anciens projets locaux ne sont ni publiés ni attribués automatiquement à 
   Il n'y a pas encore de file de jobs multi-workers.
 - 0,5 vCPU privilégie le coût : le rendu peut être lent. Durée cible limitée à 300 s,
   upload limité à 500 Mo par fichier et 10 fichiers par requête, 1 révision du Critic,
-  20 tours du Director et timeout de 10 minutes par commande média.
+  20 tours du Director et timeout de 10 minutes par commande média. Le serveur Node
+  accepte désormais jusqu'à 30 minutes pour recevoir un upload volumineux
+  (`server.requestTimeout`) — la limite par défaut de 5 minutes coupait net les
+  uploads multi-vidéos sur une connexion lente.
+- La voix off générée (Amazon Polly) n'est jamais utilisée par défaut : les outils
+  `list_voices`/`synthesize_narration` ne sont même pas exposés au Director tant que
+  l'humain n'a pas explicitement coché « Allow generated voice-over narration » pour
+  ce run (`allowNarration`, par défaut `false` partout — API, CLI, UI).
 - Une seule tâche active : pas de haute disponibilité applicative. Les déploiements
-  arrêtent l'ancienne tâche avant la nouvelle (`minimumHealthyPercent=0`, maximum=100).
-  Prévoir une courte interruption et ne pas déployer pendant un rendu.
+  démarrent la nouvelle tâche avant d'arrêter l'ancienne (`minimumHealthyPercent=100`,
+  `maximum=200`), et le délai de désenregistrement de l'ALB est de 30 minutes
+  (`deregistration_delay.timeout_seconds=1800`) — un upload volumineux déjà en cours
+  sur l'ancienne tâche a le temps de se terminer au lieu d'être coupé net. Ce n'était
+  pas le cas au départ (30 secondes, `minimumHealthyPercent=0`) : plusieurs uploads
+  réels ont été interrompus par des déploiements avant correction.
 - SQLite reste en journal DELETE, synchronous FULL, un seul processus serveur,
   sauvegardes EFS activées. Ne pas activer WAL sur le partage NFS ni augmenter le
   nombre de réplicas sans revoir la base, les verrous et l'exécution des jobs.
